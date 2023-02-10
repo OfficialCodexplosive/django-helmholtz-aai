@@ -1,0 +1,42 @@
+image: python:3.8-alpine
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+before_script:
+  - |
+    apk add --update --no-cache \
+    ttf-freefont gcc musl-dev g++ libxslt-dev \
+    libressl-dev libffi-dev git \
+    libxml2 libxslt jpeg-dev zlib-dev \
+    make cmake
+  - python -V  # Print out python version for debugging
+  - python -m venv venv
+  - source venv/bin/activate
+  - python -m pip install -U pip
+
+build-pkg:
+  script:
+    - git fetch --tags origin
+    - pip install twine wheel
+    - python setup.py sdist bdist_wheel
+    - twine check dist/*
+    - TWINE_PASSWORD=${CI_JOB_TOKEN} TWINE_USERNAME=gitlab-ci-token python -m twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi dist/*
+
+test:
+  script:
+    - pip install tox .[testsite]
+    - sh ci/check-migrations.sh
+    - python manage.py migrate
+    - tox
+
+test-docs:
+  script:
+    - pip install . -r docs/requirements.txt
+    - cd docs
+    - make linkcheck
