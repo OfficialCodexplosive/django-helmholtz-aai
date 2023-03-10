@@ -73,9 +73,14 @@ class HelmholtzLoginView(LoginView):
 
     def get(self, request):
         """Get the redirect URL to the Helmholtz AAI."""
-        redirect_uri = request.build_absolute_uri(
-            reverse("django_helmholtz_aai:auth")
-        )
+        if getattr(settings, "ROOT_URL", None):
+            redirect_uri = settings.ROOT_URL + reverse(
+                "django_helmholtz_aai:auth"
+            )
+        else:
+            redirect_uri = request.build_absolute_uri(
+                reverse("django_helmholtz_aai:auth")
+            )
         request.session["forward_after_aai_login"] = self.get_success_url()
         return oauth.helmholtz.authorize_redirect(request, redirect_uri)
 
@@ -477,6 +482,9 @@ class HelmholtzAuthentificationView(PermissionRequiredMixin, generic.View):
             name=vo_name, eduperson_entitlement=vo_name
         )
         signals.aai_vo_created.send(
-            sender=vo.__class__, request=self.request, vo=vo, userinfo=self
+            sender=vo.__class__,
+            request=self.request,
+            vo=vo,
+            userinfo=self.userinfo,
         )
         return vo
