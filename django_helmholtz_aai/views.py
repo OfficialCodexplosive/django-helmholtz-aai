@@ -34,7 +34,7 @@ from __future__ import annotations
 import re
 from enum import Enum
 from itertools import product
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from authlib.integrations.django_client import OAuth
 from django.conf import settings
@@ -63,7 +63,11 @@ SCOPES = [
 oauth.register(name="helmholtz", **app_settings.HELMHOLTZ_CLIENT_KWS)
 
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from django.contrib.auth.models import User
+
+
+User = get_user_model()  # type: ignore  # noqa: F811
 
 group_patt = re.compile(r".*:group:.*#.*")
 
@@ -217,6 +221,13 @@ class HelmholtzAuthentificationView(PermissionRequiredMixin, generic.View):
         )
         return super().handle_no_permission()
 
+    def get_user_from_email(self, email: str) -> Optional[User]:
+        """Get a user from the email"""
+        try:
+            return User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return None
+
     @cached_property
     def is_new_user(self) -> bool:
         """True if the Helmholtz AAI user has never logged in before."""
@@ -227,23 +238,19 @@ class HelmholtzAuthentificationView(PermissionRequiredMixin, generic.View):
             )
         except models.HelmholtzUser.DoesNotExist:
             if app_settings.HELMHOLTZ_MAP_ACCOUNTS:
-                try:
-                    user = User.objects.get(
-                        email__iexact=self.userinfo["email"]
-                    )
-                except User.DoesNotExist:
+                user = self.get_user_from_email(self.userinfo["email"])
+                if user is None:
                     return True
-                else:
-                    fields = {
-                        f.name: getattr(user, f.name)
-                        for f in User._meta.fields
-                        if not f.many_to_many
-                    }
-                    self.aai_user = models.HelmholtzUser(
-                        user_ptr=user, eduperson_unique_id=user_id, **fields
-                    )
-                    self.aai_user.save()
-                    return False
+                fields = {
+                    f.name: getattr(user, f.name)
+                    for f in User._meta.fields
+                    if not f.many_to_many
+                }
+                self.aai_user = models.HelmholtzUser(
+                    user_ptr=user, eduperson_unique_id=user_id, **fields
+                )
+                self.aai_user.save()
+                return False
             else:
                 return True
         else:

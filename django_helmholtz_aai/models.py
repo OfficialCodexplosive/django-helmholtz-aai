@@ -73,6 +73,9 @@ class HelmholtzUser(User):
 
     eduperson_unique_id = models.CharField(max_length=500, unique=True)
 
+    class Meta:
+        app_label = "django_helmholtz_aai"
+
 
 class HelmholtzVirtualOrganizationQuerySet(models.QuerySet):
     """A queryset with an extra command to remove empty VOs."""
